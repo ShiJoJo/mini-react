@@ -25,17 +25,17 @@ const createElement = (type, props, ...children) => {
 };
 
 let nextWorkOfUnit = null;
-let root = null;
+let wipRoot = null;
 let currentRoot = null;
 const render = (el, container) => {
-  nextWorkOfUnit = {
+  wipRoot = {
     props: {
       children: [el],
     },
     dom: container,
   };
   requestIdleCallback(workLoop);
-  root = nextWorkOfUnit;
+  nextWorkOfUnit = wipRoot;
 };
 
 const workLoop = (deadLine) => {
@@ -47,7 +47,7 @@ const workLoop = (deadLine) => {
     }
   }
   // vdom处理完成后进行dom节点插入
-  if (!nextWorkOfUnit && root) {
+  if (!nextWorkOfUnit && wipRoot) {
     commitRoot();
   }
   requestIdleCallback(workLoop);
@@ -55,9 +55,9 @@ const workLoop = (deadLine) => {
 
 /** 插入根节点 */
 const commitRoot = () => {
-  commitDom(root.child);
-  currentRoot = root;
-  root = null;
+  commitDom(wipRoot.child);
+  currentRoot = wipRoot;
+  wipRoot = null;
 };
 
 const commitDom = (fiber) => {
@@ -111,7 +111,7 @@ const updateProps = (dom, nextProps, prevProps) => {
   });
 };
 
-const initChildren = (fiber, children) => {
+const reconcileChildren = (fiber, children) => {
   let oldFiber = fiber.alternate?.child;
   let prevChild = null;
   children.forEach((child, index) => {
@@ -155,7 +155,7 @@ const initChildren = (fiber, children) => {
 const updateFunctionComponent = (fiber) => {
   const children = [fiber.type(fiber.props)];
   // 3、建立链表关系
-  initChildren(fiber, children);
+  reconcileChildren(fiber, children);
 };
 
 /** 处理普通组件 */
@@ -168,7 +168,7 @@ const updateHostComponent = (fiber) => {
   }
   const children = fiber.props.children;
   // 3、建立链表关系
-  initChildren(fiber, children);
+  reconcileChildren(fiber, children);
 };
 
 /** 处理dom节点 */
@@ -195,12 +195,12 @@ const performWorkOfUnit = (fiber) => {
 };
 
 const update = () => {
-  nextWorkOfUnit = {
+  wipRoot = {
     props: currentRoot.props,
     dom: currentRoot.dom,
     alternate: currentRoot,
   };
-  root = nextWorkOfUnit;
+  nextWorkOfUnit = wipRoot;
 };
 
 export default {
