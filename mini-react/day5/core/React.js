@@ -27,7 +27,8 @@ const createElement = (type, props, ...children) => {
 let nextWorkOfUnit = null;
 let wipRoot = null;
 let currentRoot = null;
-let deleDomLst = [];
+let deletions = [];
+let wipFiber = null;
 const render = (el, container) => {
   wipRoot = {
     props: {
@@ -43,6 +44,9 @@ const workLoop = (deadLine) => {
   let shouldYield = false;
   while (!shouldYield && nextWorkOfUnit) {
     nextWorkOfUnit = performWorkOfUnit(nextWorkOfUnit);
+    if (wipRoot?.sibling?.type === nextWorkOfUnit?.type) {
+      nextWorkOfUnit = undefined;
+    }
     if (deadLine.timeRemaining() < 1) {
       shouldYield = true;
     }
@@ -56,11 +60,11 @@ const workLoop = (deadLine) => {
 
 /** 插入根节点 */
 const commitRoot = () => {
-  deleDomLst.forEach(commitDeletion);
+  deletions.forEach(commitDeletion);
   commitDom(wipRoot.child);
   currentRoot = wipRoot;
   wipRoot = null;
-  deleDomLst = [];
+  deletions = [];
 };
 
 /** 删除节点 */
@@ -145,17 +149,19 @@ const reconcileChildren = (fiber, children) => {
         effectTag: "update",
       };
     } else {
-      newWork = {
-        type: child.type,
-        props: child.props,
-        child: null,
-        sibling: null,
-        parent: fiber,
-        dom: null,
-        effectTag: "placement",
-      };
+      if (child) {
+        newWork = {
+          type: child.type,
+          props: child.props,
+          child: null,
+          sibling: null,
+          parent: fiber,
+          dom: null,
+          effectTag: "placement",
+        };
+      }
       if (oldFiber) {
-        deleDomLst.push(oldFiber);
+        deletions.push(oldFiber);
       }
     }
     if (oldFiber) {
@@ -166,12 +172,20 @@ const reconcileChildren = (fiber, children) => {
     } else {
       prevChild.sibling = newWork;
     }
-    prevChild = newWork;
+    if (newWork) {
+      prevChild = newWork;
+    }
   });
+
+  while (oldFiber) {
+    deletions.push(oldFiber);
+    oldFiber = oldFiber.sibling;
+  }
 };
 
 /** 处理函数组件 */
 const updateFunctionComponent = (fiber) => {
+  wipFiber = fiber;
   const children = [fiber.type(fiber.props)];
   // 3、建立链表关系
   reconcileChildren(fiber, children);
@@ -214,12 +228,14 @@ const performWorkOfUnit = (fiber) => {
 };
 
 const update = () => {
-  wipRoot = {
-    props: currentRoot.props,
-    dom: currentRoot.dom,
-    alternate: currentRoot,
+  let currentFiber = wipFiber;
+  return () => {
+    wipRoot = {
+      ...currentFiber,
+      alternate: currentFiber,
+    };
+    nextWorkOfUnit = wipRoot;
   };
-  nextWorkOfUnit = wipRoot;
 };
 
 export default {
